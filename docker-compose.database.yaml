@@ -2,56 +2,56 @@ version: '3.9'
 
 services:
   postgres:
-    image: postgres:15
+    image: postgres:15  # Use the official PostgreSQL version 15 image
     environment: 
-      POSTGRES_USER:
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-      POSTGRES_DBNAME:
+      POSTGRES_USER:  # Environment variable for the PostgreSQL username
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password  # Environment variable for the path to the PostgreSQL password file
+      POSTGRES_DBNAME:  # Environment variable for the PostgreSQL database name
     ports:
-      - target: 5432
-        published: ${POSTGRES_PUBLISH_PORT:-5432}
-        mode: host
+      - target: 5432  # Target port for PostgreSQL
+        published: ${POSTGRES_PUBLISH_PORT:-5432}  # Publish PostgreSQL on the specified port
+        mode: host  # Port publishing mode
     secrets:
-      - postgres_password
-    command: postgres -c max_connections=2048 -c shared_buffers=32GB -c work_mem=8GB -c max_wal_size=16GB
+      - postgres_password  # Secret for PostgreSQL password
+    command: postgres -c max_connections=2048 -c shared_buffers=32GB -c work_mem=8GB -c max_wal_size=16GB  # PostgreSQL command with specific configurations
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    shm_size: 16G
+      test: ["CMD-SHELL", "pg_isready -U postgres"]  # Health check command to check PostgreSQL readiness
+      interval: 5s  # Interval between health checks
+      timeout: 5s  # Timeout for each health check
+      retries: 5  # Number of retries for the health check
+    shm_size: 16G  # Shared memory size
     tmpfs:
-      - /shm_tmp:size=16G
+      - /shm_tmp:size=16G  # Temporary filesystem size
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data  # Volume for PostgreSQL data
       - type: tmpfs
-        target: /dev/shm
+        target: /dev/shm  # Mount tmpfs at /dev/shm
     deploy:
-      mode: replicated
-      replicas: 1
+      mode: replicated  # Deployment mode for the service
+      replicas: 1  # Number of replicas for the service
       restart_policy:
-        condition: any
+        condition: any  # Restart policy for any condition
       placement:
         constraints:
-          - "node.labels.${TONCENTER_ENV:?}.indexer-cpp.storage==true"
+          - "node.labels.${TONCENTER_ENV:?}.indexer-cpp.storage==true"  # Constraint to place the service on specific nodes
     networks:
-      internal:
+      internal:  # Connect to the internal network
     logging:
-      driver: local
+      driver: local  # Use local logging driver
       options:
-        max-size: 4G
+        max-size: 4G  # Maximum log size
 
 volumes:
   postgres_data:
-    external: false
+    external: false  # Define the PostgreSQL data volume as non-external
 
 networks:
   internal:
-    attachable: true
-    external: false
+    attachable: true  # Allow attaching other services to this network
+    external: false  # Define the internal network as non-external
     driver_opts:
-      com.docker.network.driver.mtu: 1350
+      com.docker.network.driver.mtu: 1350  # Set MTU for the network driver
 
 secrets:
   postgres_password:
-    file: ${POSTGRES_PASSWORD_FILE:-private/postgres_password}
+    file: ${POSTGRES_PASSWORD_FILE:-private/postgres_password}  # Define the secret file for PostgreSQL password

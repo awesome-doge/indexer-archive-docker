@@ -1,108 +1,111 @@
 version: "3.9"
 
+# Common environment variables for PostgreSQL configuration
 x-indexer-environment: &index-common
-  POSTGRES_DIALECT: ${POSTGRES_DIALECT:-postgresql+asyncpg}
-  POSTGRES_HOST:
-  POSTGRES_PORT:
-  POSTGRES_USER:
-  POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-  POSTGRES_DBNAME:
-  POSTGRES_DBROOT:
-  POSTGRES_PUBLISH_PORT:
+  POSTGRES_DIALECT: ${POSTGRES_DIALECT:-postgresql+asyncpg}  # The SQLAlchemy dialect to use
+  POSTGRES_HOST:  # Hostname of the PostgreSQL server
+  POSTGRES_PORT:  # Port number of the PostgreSQL server
+  POSTGRES_USER:  # Username for the PostgreSQL database
+  POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password  # Path to the file containing the PostgreSQL password
+  POSTGRES_DBNAME:  # Name of the PostgreSQL database
+  POSTGRES_DBROOT:  # Root directory for the PostgreSQL database
+  POSTGRES_PUBLISH_PORT:  # Port to publish PostgreSQL service
 
+# Environment variables specific to the index API service
 x-index-api: &index-api
-  TON_INDEXER_API_ROOT_PATH:
-  TON_INDEXER_API_PORT:
-  TON_INDEXER_TON_HTTP_API_ENDPOINT:
-  TON_INDEXER_IS_TESTNET:
-  <<: *index-common
+  TON_INDEXER_API_ROOT_PATH:  # Root path for the index API
+  TON_INDEXER_API_PORT:  # Port for the index API
+  TON_INDEXER_TON_HTTP_API_ENDPOINT:  # Endpoint for the TON HTTP API
+  TON_INDEXER_IS_TESTNET:  # Flag to indicate if it's a testnet
+  <<: *index-common  # Include common PostgreSQL environment variables
 
+# Environment variables specific to the index worker service
 x-index-worker: &index-worker
-  TON_WORKER_FROM:
-  <<: *index-common
+  TON_WORKER_FROM:  # Starting point for the index worker
+  <<: *index-common  # Include common PostgreSQL environment variables
 
 services:
   index-api:
     build:
-      context: indexer
-      dockerfile: Dockerfile
+      context: indexer  # Build context for the index API service
+      dockerfile: Dockerfile  # Dockerfile to use for building the index API service
     secrets:
-      - postgres_password
-    command: gunicorn indexer.api.main:app -k uvicorn.workers.UvicornWorker --bind=0.0.0.0:8081 -w ${TON_INDEXER_WORKERS:-1}
+      - postgres_password  # Secret for PostgreSQL password
+    command: gunicorn indexer.api.main:app -k uvicorn.workers.UvicornWorker --bind=0.0.0.0:8081 -w ${TON_INDEXER_WORKERS:-1}  # Command to start the index API service
     ports:
       - target: 8081
-        published: ${TON_INDEXER_API_PORT:-8081}
-    environment: *index-api
-    restart: always
+        published: ${TON_INDEXER_API_PORT:-8081}  # Publish the API service on the specified port
+    environment: *index-api  # Set environment variables for the index API service
+    restart: always  # Always restart the service on failure
     networks:
-      internal:
+      internal:  # Connect to the internal network
     depends_on:
-      - alembic
+      - alembic  # Depend on the alembic service
 
   alembic:
     build:
-      context: indexer
-      dockerfile: Dockerfile
-    environment: *index-api 
+      context: indexer  # Build context for the alembic service
+      dockerfile: Dockerfile  # Dockerfile to use for building the alembic service
+    environment: *index-api  # Set environment variables for the alembic service
     secrets:
-      - postgres_password
-    command: alembic upgrade head-1
+      - postgres_password  # Secret for PostgreSQL password
+    command: alembic upgrade head-1  # Command to run alembic migrations
     networks:
-      internal:
+      internal:  # Connect to the internal network
     depends_on:
       postgres:
-        condition: service_healthy
+        condition: service_healthy  # Depend on the PostgreSQL service being healthy
 
   index-worker:
     build:
-      context: ton-index-cpp
-      dockerfile: Dockerfile
+      context: ton-index-cpp  # Build context for the index worker service
+      dockerfile: Dockerfile  # Dockerfile to use for building the index worker service
     secrets:
-      - postgres_password
+      - postgres_password  # Secret for PostgreSQL password
     volumes:
-      - ${TON_WORKER_DBROOT}:/tondb
-    environment: *index-worker
+      - ${TON_WORKER_DBROOT}:/tondb  # Volume for the worker database root
+    environment: *index-worker  # Set environment variables for the index worker service
     networks:
-      internal:
-    command: --from ${TON_WORKER_FROM:-1}
-    restart: unless-stopped
+      internal:  # Connect to the internal network
+    command: --from ${TON_WORKER_FROM:-1}  # Command to start the index worker service
+    restart: unless-stopped  # Restart the service unless it is stopped
     depends_on:
       alembic:
-        condition: service_completed_successfully
+        condition: service_completed_successfully  # Depend on the alembic service completing successfully
 
   postgres:
-    image: postgres:16
-    environment: *index-common
+    image: postgres:16  # Use the official PostgreSQL image
+    environment: *index-common  # Set environment variables for PostgreSQL
     ports:
-      - ${POSTGRES_PUBLISH_PORT:-5432}:5432
+      - ${POSTGRES_PUBLISH_PORT:-5432}:5432  # Publish PostgreSQL on the specified port
     secrets:
-      - postgres_password
-    command: postgres -c max_connections=1024 -c shared_buffers=4GB -c work_mem=64MB -c max_wal_size=1GB -c tcp_keepalives_idle=60 -c tcp_keepalives_interval=60 -c tcp_keepalives_count=60
+      - postgres_password  # Secret for PostgreSQL password
+    command: postgres -c max_connections=1024 -c shared_buffers=4GB -c work_mem=64MB -c max_wal_size=1GB -c tcp_keepalives_idle=60 -c tcp_keepalives_interval=60 -c tcp_keepalives_count=60  # PostgreSQL command with specific configurations
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    shm_size: 2G
-    restart: always
+      test: ["CMD-SHELL", "pg_isready -U postgres"]  # Health check command to check PostgreSQL readiness
+      interval: 5s  # Interval between health checks
+      timeout: 5s  # Timeout for each health check
+      retries: 5  # Number of retries for the health check
+    shm_size: 2G  # Shared memory size
+    restart: always  # Always restart the service on failure
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data  # Volume for PostgreSQL data
     networks:
-      internal:
+      internal:  # Connect to the internal network
     logging:
-      driver: local
+      driver: local  # Use local logging driver
       options:
-        max-size: 4G
+        max-size: 4G  # Maximum log size
 
 volumes:
   postgres_data:
-    external: false
+    external: false  # Define the PostgreSQL data volume as non-external
 
 networks:
   internal:
-    attachable: true
-    external: false
+    attachable: true  # Allow attaching other services to this network
+    external: false  # Define the internal network as non-external
 
 secrets:
   postgres_password:
-    file: ${POSTGRES_PASSWORD_FILE:-private/postgres_password}
+    file: ${POSTGRES_PASSWORD_FILE:-private/postgres_password}  # Define the secret file for PostgreSQL password

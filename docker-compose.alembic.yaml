@@ -1,46 +1,46 @@
 version: '3.9'
 
-
+# Common environment variables for the indexer services
 x-indexer-environment: &indexer-environment
-  POSTGRES_DIALECT: ${POSTGRES_DIALECT:-postgresql+asyncpg}
-  POSTGRES_HOST:
-  POSTGRES_PORT:
-  POSTGRES_USER:
-  POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-  POSTGRES_DBNAME:
-  TON_INDEXER_API_ROOT_PATH:
+  POSTGRES_DIALECT: ${POSTGRES_DIALECT:-postgresql+asyncpg}  # SQLAlchemy dialect for PostgreSQL
+  POSTGRES_HOST:  # Hostname for the PostgreSQL server
+  POSTGRES_PORT:  # Port number for the PostgreSQL server
+  POSTGRES_USER:  # Username for PostgreSQL
+  POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password  # Path to the file containing the PostgreSQL password
+  POSTGRES_DBNAME:  # Name of the PostgreSQL database
+  TON_INDEXER_API_ROOT_PATH:  # Root path for the index API
 
 services:
   alembic:
-    image: ${DOCKER_REGISTRY:-docker.io/toncenter}/ton-indexer-cpp:${IMAGE_TAG:?}
+    image: ${DOCKER_REGISTRY:-docker.io/toncenter}/ton-indexer-cpp:${IMAGE_TAG:?}  # Image for the alembic service
     build:
-      context: indexer
-      dockerfile: Dockerfile
-    environment: *indexer-environment 
+      context: indexer  # Build context for the alembic service
+      dockerfile: Dockerfile  # Dockerfile to use for building the alembic service
+    environment: *indexer-environment  # Set environment variables for the alembic service
     secrets:
-      - postgres_password
-    command: alembic upgrade head-1
+      - postgres_password  # Secret for PostgreSQL password
+    command: alembic upgrade head-1  # Command to run alembic migrations
     deploy:
-      mode: replicated
-      replicas: 1
+      mode: replicated  # Deployment mode for the service
+      replicas: 1  # Number of replicas for the service
       placement:
         constraints:
-          - "node.labels.${TONCENTER_ENV:?}.indexer-cpp.api==true"
+          - "node.labels.${TONCENTER_ENV:?}.indexer-cpp.api==true"  # Constraint to place the service on specific nodes
       restart_policy:
-        condition: on-failure
-        delay: 3s
-        max_attempts: 3
-        window: 60s
+        condition: on-failure  # Restart policy for the service
+        delay: 3s  # Delay between restarts
+        max_attempts: 3  # Maximum number of restart attempts
+        window: 60s  # Time window for restart attempts
     networks:
-      internal:
+      internal:  # Connect to the internal network
 
 networks:
   internal:
-    attachable: true
-    external: false
+    attachable: true  # Allow attaching other services to this network
+    external: false  # Define the internal network as non-external
     driver_opts:
-      com.docker.network.driver.mtu: 1350
+      com.docker.network.driver.mtu: 1350  # Set MTU for the network driver
 
 secrets:
   postgres_password:
-    file: ${POSTGRES_PASSWORD_FILE:-private/postgres_password}
+    file: ${POSTGRES_PASSWORD_FILE:-private/postgres_password}  # Define the secret file for PostgreSQL password

@@ -1,54 +1,54 @@
 version: '3.9'
 
+# Common environment variables for the indexer services
 x-indexer-environment: &indexer-environment
-  POSTGRES_DIALECT: ${POSTGRES_DIALECT:-postgresql+asyncpg}
-  POSTGRES_HOST:
-  POSTGRES_PORT:
-  POSTGRES_USER:
-  POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-  POSTGRES_DBNAME:
-  TON_INDEXER_API_ROOT_PATH:
-  TON_INDEXER_API_TITLE:
-  TON_INDEXER_TON_HTTP_API_ENDPOINT:
-  TON_INDEXER_IS_TESTNET:
+  POSTGRES_DIALECT: ${POSTGRES_DIALECT:-postgresql+asyncpg}  # SQLAlchemy dialect for PostgreSQL
+  POSTGRES_HOST:  # Hostname for the PostgreSQL server
+  POSTGRES_PORT:  # Port number for the PostgreSQL server
+  POSTGRES_USER:  # Username for PostgreSQL
+  POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password  # Path to the file containing the PostgreSQL password
+  POSTGRES_DBNAME:  # Name of the PostgreSQL database
+  TON_INDEXER_API_ROOT_PATH:  # Root path for the index API
+  TON_INDEXER_API_TITLE:  # Title for the index API
+  TON_INDEXER_TON_HTTP_API_ENDPOINT:  # Endpoint for the TON HTTP API
+  TON_INDEXER_IS_TESTNET:  # Flag to indicate if it's a testnet
 
 services:
   index-api:
-    image: ${DOCKER_REGISTRY:-localhost:5000}/ton-indexer-cpp:${IMAGE_TAG:?}
+    image: ${DOCKER_REGISTRY:-localhost:5000}/ton-indexer-cpp:${IMAGE_TAG:?}  # Image for the index API service
     build:
-      context: indexer
-      dockerfile: Dockerfile
+      context: indexer  # Build context for the index API service
+      dockerfile: Dockerfile  # Dockerfile to use for building the index API service
     secrets:
-      - postgres_password
-    command: gunicorn indexer.api.main:app -k uvicorn.workers.UvicornWorker --bind=0.0.0.0:8081 -w ${TON_INDEXER_WORKERS:-1}
+      - postgres_password  # Secret for PostgreSQL password
+    command: gunicorn indexer.api.main:app -k uvicorn.workers.UvicornWorker --bind=0.0.0.0:8081 -w ${TON_INDEXER_WORKERS:-1}  # Command to start the index API service with Gunicorn and Uvicorn
     ports:
-      - target: 8081
-        published: ${TON_INDEXER_API_PORT:-8081}
-        protocol: tcp
-        mode: host
-    environment: *indexer-environment 
+      - target: 8081  # Target port for the index API service
+        published: ${TON_INDEXER_API_PORT:-8081}  # Publish the API service on the specified port
+        protocol: tcp  # Protocol to use for the port
+        mode: host  # Port publishing mode
+    environment: *indexer-environment  # Set environment variables for the index API service
     deploy:
-      mode: replicated
-      replicas: ${SWARM_REPLICAS:-1}
+      mode: replicated  # Deployment mode for the service
+      replicas: ${SWARM_REPLICAS:-1}  # Number of replicas for the service
       placement:
         constraints:
-          - "node.labels.${TONCENTER_ENV:?}.indexer-cpp.api==true"
+          - "node.labels.${TONCENTER_ENV:?}.indexer-cpp.api==true"  # Constraint to place the service on specific nodes
     networks:
-      internal:
+      internal:  # Connect to the internal network
       toncenter-global:
         aliases:
-          - ${TONCENTER_ENV:?}-indexer-cpp-api
+          - ${TONCENTER_ENV:?}-indexer-cpp-api  # Alias for the service on the global network
 
 networks:
   internal:
-    attachable: true
-    external: false
+    attachable: true  # Allow attaching other services to this network
+    external: false  # Define the internal network as non-external
     driver_opts:
-      com.docker.network.driver.mtu: 1350
+      com.docker.network.driver.mtu: 1350  # Set MTU for the network driver
   toncenter-global:
-    external: true
+    external: true  # Define the global network as external
 
 secrets:
   postgres_password:
-    file: ${POSTGRES_PASSWORD_FILE:-private/postgres_password}
-  
+    file: ${POSTGRES_PASSWORD_FILE:-private/postgres_password}  # Define the secret file for PostgreSQL password
